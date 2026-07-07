@@ -5,3 +5,4 @@ Werkzeug==2.3.6
 opencv-python-headless==4.10.0.84
 mediapipe
 fpdf2==2.8.2
+gunicorn
