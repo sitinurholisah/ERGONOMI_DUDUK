@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Profil - ERGO AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">ERGO AI - Profil</h1>
+        <a href="/dashboard" class="bg-gray-500 px-4 py-2 rounded hover:bg-gray-600">Kembali</a>
+    </nav>
+    <div class="p-8 max-w-2xl mx-auto">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6">Profil Saya</h2>
+        <div class="bg-white p-8 rounded-lg shadow-lg">
+            <div class="flex items-center mb-6">
+                <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-3xl text-blue-600 font-bold">
+                    {{ nama[0] }}
+                </div>
+                <div class="ml-4">
+                    <h3 class="text-xl font-bold">{{ nama }}</h3>
+                    <p class="text-gray-500">{{ current_user.email }}</p>
+                </div>
+            </div>
+            <form method="POST">
+                <label class="block text-gray-700 font-bold mb-2">Nama Lengkap</label>
+                <input type="text" name="nama" value="{{ nama }}" class="w-full p-3 border rounded mb-4" required>
+                <button type="submit" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">Simpan Perubahan</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

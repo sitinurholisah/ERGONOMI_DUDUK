@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Statistik - ERGO AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">ERGO AI - Statistik</h1>
+        <div class="flex items-center gap-4">
+            <span>Halo, {{ nama }}!</span>
+            <a href="/dashboard" class="bg-gray-500 px-4 py-2 rounded hover:bg-gray-600">Kembali</a>
+        </div>
+    </nav>
+
+    <div class="p-8 max-w-4xl mx-auto">
+        <h2 class="text-3xl font-bold text-gray-800 mb-6">Statistik Postur Bungkuk (7 Hari Terakhir)</h2>
+        
+        <div class="bg-white p-6 rounded-lg shadow">
+            <canvas id="postureChart"></canvas>
+        </div>
+
+        <div class="mt-6 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded">
+            <p class="font-bold">Tips:</p>
+            <p>Grafik ini menampilkan berapa kali sistem mendeteksi Anda bungkuk setiap harinya.</p>
+        </div>
+    </div>
+
+    <!-- jshint ignore:start -->
+    <script>
+        var ctx = document.getElementById('postureChart').getContext('2d');
+        var myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ labels | tojson }},
+                datasets: [{
+                    label: 'Jumlah Peringatan Bungkuk',
+                    data: {{ data | tojson }},
+                    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+    <!-- jshint ignore:end -->
+</body>
+</html>

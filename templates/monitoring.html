@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoring Live - ErgoVision</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <nav class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center gap-3">
+            <a href="/dashboard" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
+            <h1 class="text-xl font-bold">Monitoring Real-Time</h1>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg">
+                <i class="fas fa-stopwatch text-blue-400"></i>
+                <span id="sessionTimer" class="font-mono text-lg font-bold">00:00:00</span>
+            </div>
+            <a href="/stop_camera" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition">
+                <i class="fas fa-stop-circle mr-2"></i>Stop Camera
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center justify-center p-8">
+        
+        <div class="relative bg-black p-2 rounded-2xl shadow-2xl border-4 border-gray-800">
+            <!-- Video Feed -->
+            <img src="{{ url_for('video_feed') }}" class="rounded-xl max-w-full h-auto" style="max-height: 70vh;">
+            
+            <!-- Live Badge -->
+            <div class="absolute top-6 left-6 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+                <div class="w-2 h-2 bg-white rounded-full"></div> LIVE AI DETECTION
+            </div>
+        </div>
+
+        <!-- Status Panel -->
+        <div class="mt-8 w-full max-w-2xl bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-gray-300">AI Posture Analysis</h3>
+                <span id="statusBadge" class="px-4 py-1 rounded-full text-sm font-bold bg-gray-600 text-gray-300">Mencari...</span>
+            </div>
+            <div class="bg-gray-900 rounded-lg p-4 text-center">
+                <p class="text-gray-400 text-sm mb-2">Active Early Warning System</p>
+                <p class="text-xl font-semibold" id="aiMessage">Duduklah dengan tegak di depan kamera.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- JavaScript untuk Timer & Alarm -->
+    <script>
+        // Variables untuk tracking
+        let timerInterval = null;
+        let apiCheckInterval = null;
+        let seconds = 0;
+        let lastAlertTime = 0;
+        let audioCtx = null;
+
+        // 1. Session Timer
+        function startTimer() {
+            seconds = 0;
+            timerInterval = setInterval(() => {
+                seconds++;
+                const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
+                const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
+                const s = String(seconds % 60).padStart(2, '0');
+                document.getElementById('sessionTimer').innerText = `${h}:${m}:${s}`;
+            }, 1000);
+        }
+
+        // 2. Audio Alert System
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+        
+        function playBeep() {
+            if (!audioCtx) return;
+            
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 880;
+            gainNode.gain.value = 0.1;
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200);
+        }
+
+        // 3. Cek Status AI tiap 1 detik
+        function startAPICheck() {
+            apiCheckInterval = setInterval(() => {
+                fetch('/api_status')
+                    .then(res => res.json())
+                    .then(data => {
+                        const badge = document.getElementById('statusBadge');
+                        const msg = document.getElementById('aiMessage');
+                        
+                        if (data.status.includes('TEGAK')) {
+                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-green-500 text-white";
+                            badge.innerText = "POSTUR BAIK";
+                            msg.innerText = "Pertahankan posisi dudukmu!";
+                            msg.className = "text-xl font-semibold text-green-400";
+                        } else if (data.status.includes('MIRING')) {
+                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-yellow-500 text-black";
+                            badge.innerText = "POSISI MIRING";
+                            msg.innerText = "Luruskan badanmu, jangan miring!";
+                            msg.className = "text-xl font-semibold text-yellow-400";
+                            
+                            if (Date.now() - lastAlertTime > 5000) {
+                                playBeep();
+                                lastAlertTime = Date.now();
+                            }
+                        } else if (data.status.includes('BUNGKUK')) {
+                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-red-600 text-white animate-pulse";
+                            badge.innerText = "AWAS BUNGKUK!";
+                            msg.innerText = "Tegakkan punggungmu sekarang!";
+                            msg.className = "text-xl font-semibold text-red-500 font-bold";
+                            
+                            if (Date.now() - lastAlertTime > 5000) {
+                                playBeep();
+                                lastAlertTime = Date.now();
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        // Kalau ada error (misal camera udah stop), stop semua interval
+                        stopAll();
+                    });
+            }, 1000);
+        }
+
+        // 4. Fungsi untuk stop semua interval
+        function stopAll() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            if (apiCheckInterval) {
+                clearInterval(apiCheckInterval);
+                apiCheckInterval = null;
+            }
+            // Reset badge ke default
+            const badge = document.getElementById('statusBadge');
+            const msg = document.getElementById('aiMessage');
+            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-gray-600 text-gray-300";
+            badge.innerText = "Camera Dimatikan";
+            msg.innerText = "Kamera telah dimatikan. Silakan refresh halaman untuk memulai kembali.";
+            msg.className = "text-xl font-semibold text-gray-400";
+        }
+
+        // Initialize saat halaman load
+        window.addEventListener('load', () => {
+            initAudio();
+            startTimer();
+            startAPICheck();
+        });
+
+        // Cleanup saat halaman ditutup/refresh
+        window.addEventListener('beforeunload', () => {
+            stopAll();
+        });
+    </script>
+</body>
+</html>
