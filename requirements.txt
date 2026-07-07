@@ -2,8 +2,8 @@ Flask==2.3.2
 Flask-SQLAlchemy==3.0.5
 Flask-Login==0.6.2
 Werkzeug==2.3.6
-opencv-python-headless
-mediapipe
+opencv-python-headless==4.8.1.78
+mediapipe==0.10.14
+numpy==1.24.4
 fpdf==1.7.2
-gunicorn
-numpy
+gunicorn==21.2.0

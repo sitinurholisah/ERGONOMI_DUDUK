@@ -3,170 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <title>Monitoring Live - ErgoVision</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
+        #video-container { position: relative; width: 640px; margin: 0 auto; }
+        video { width: 100%; border-radius: 10px; border: 2px solid #0f3460; }
+        #overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; text-align: left; }
+        .status-box { margin-top: 20px; padding: 15px; background: #16213e; border-radius: 10px; display: inline-block; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e94560; color: white; border: none; border-radius: 5px; }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col">
-
-    <!-- Header -->
-    <nav class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-md">
-        <div class="flex items-center gap-3">
-            <a href="/dashboard" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
-            <h1 class="text-xl font-bold">Monitoring Real-Time</h1>
+<body>
+    <h1>Monitoring Postur Real-Time</h1>
+    
+    <div id="video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <div id="overlay">
+            <div style="color: yellow;">Sudut: <span id="angle-display">-</span></div>
+            <div style="color: #0f0;">Skor: <span id="score-display">-</span></div>
+            <div style="color: white;">Status: <span id="status-display">Menunggu...</span></div>
         </div>
-        <div class="flex items-center gap-6">
-            <div class="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg">
-                <i class="fas fa-stopwatch text-blue-400"></i>
-                <span id="sessionTimer" class="font-mono text-lg font-bold">00:00:00</span>
-            </div>
-            <a href="/stop_camera" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold transition">
-                <i class="fas fa-stop-circle mr-2"></i>Stop Camera
-            </a>
-        </div>
-    </nav>
+    </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col items-center justify-center p-8">
-        
-        <div class="relative bg-black p-2 rounded-2xl shadow-2xl border-4 border-gray-800">
-            <!-- Video Feed -->
-            <img src="{{ url_for('video_feed') }}" class="rounded-xl max-w-full h-auto" style="max-height: 70vh;">
-            
-            <!-- Live Badge -->
-            <div class="absolute top-6 left-6 flex items-center gap-2 bg-red-600 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                <div class="w-2 h-2 bg-white rounded-full"></div> LIVE AI DETECTION
-            </div>
-        </div>
+    <div class="status-box">
+        <p>AI Status: <span id="ai-status" style="color: yellow;">Processing...</span></p>
+    </div>
+    <br>
+    <button onclick="stopMonitoring()">Stop Monitoring & Kembali</button>
 
-        <!-- Status Panel -->
-        <div class="mt-8 w-full max-w-2xl bg-gray-800 rounded-xl p-6 border border-gray-700">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold text-gray-300">AI Posture Analysis</h3>
-                <span id="statusBadge" class="px-4 py-1 rounded-full text-sm font-bold bg-gray-600 text-gray-300">Mencari...</span>
-            </div>
-            <div class="bg-gray-900 rounded-lg p-4 text-center">
-                <p class="text-gray-400 text-sm mb-2">Active Early Warning System</p>
-                <p class="text-xl font-semibold" id="aiMessage">Duduklah dengan tegak di depan kamera.</p>
-            </div>
-        </div>
+    <canvas id="canvas" style="display:none;"></canvas>
 
-    </main>
-
-    <!-- JavaScript untuk Timer & Alarm -->
     <script>
-        // Variables untuk tracking
-        let timerInterval = null;
-        let apiCheckInterval = null;
-        let seconds = 0;
-        let lastAlertTime = 0;
-        let audioCtx = null;
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let stream;
 
-        // 1. Session Timer
-        function startTimer() {
-            seconds = 0;
-            timerInterval = setInterval(() => {
-                seconds++;
-                const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-                const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-                const s = String(seconds % 60).padStart(2, '0');
-                document.getElementById('sessionTimer').innerText = `${h}:${m}:${s}`;
-            }, 1000);
-        }
+        // 1. Akses Webcam Browser
+        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+            .then(s => {
+                stream = s;
+                video.srcObject = stream;
+                video.play();
+                startAnalysis();
+            })
+            .catch(err => {
+                alert("Gagal akses webcam: " + err);
+            });
 
-        // 2. Audio Alert System
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-        }
-        
-        function playBeep() {
-            if (!audioCtx) return;
-            
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 880;
-            gainNode.gain.value = 0.1;
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 200);
-        }
-
-        // 3. Cek Status AI tiap 1 detik
-        function startAPICheck() {
-            apiCheckInterval = setInterval(() => {
-                fetch('/api_status')
+        // 2. Kirim gambar ke server tiap 1 detik
+        function startAnalysis() {
+            setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    const imageData = canvas.toDataURL('image/jpeg', 0.5); // Kompres gambar
+                    
+                    fetch('/api/analyze_posture', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ image: imageData })
+                    })
                     .then(res => res.json())
                     .then(data => {
-                        const badge = document.getElementById('statusBadge');
-                        const msg = document.getElementById('aiMessage');
-                        
-                        if (data.status.includes('TEGAK')) {
-                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-green-500 text-white";
-                            badge.innerText = "POSTUR BAIK";
-                            msg.innerText = "Pertahankan posisi dudukmu!";
-                            msg.className = "text-xl font-semibold text-green-400";
-                        } else if (data.status.includes('MIRING')) {
-                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-yellow-500 text-black";
-                            badge.innerText = "POSISI MIRING";
-                            msg.innerText = "Luruskan badanmu, jangan miring!";
-                            msg.className = "text-xl font-semibold text-yellow-400";
-                            
-                            if (Date.now() - lastAlertTime > 5000) {
-                                playBeep();
-                                lastAlertTime = Date.now();
-                            }
-                        } else if (data.status.includes('BUNGKUK')) {
-                            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-red-600 text-white animate-pulse";
-                            badge.innerText = "AWAS BUNGKUK!";
-                            msg.innerText = "Tegakkan punggungmu sekarang!";
-                            msg.className = "text-xl font-semibold text-red-500 font-bold";
-                            
-                            if (Date.now() - lastAlertTime > 5000) {
-                                playBeep();
-                                lastAlertTime = Date.now();
-                            }
+                        if (data.success) {
+                            document.getElementById('angle-display').innerText = data.sudut + " deg";
+                            document.getElementById('score-display').innerText = data.skor;
+                            document.getElementById('status-display').innerText = data.kategori;
+                            document.getElementById('ai-status').innerText = "AI Aktif (Server)";
+                            document.getElementById('ai-status').style.color = "#0f0";
+                        } else {
+                            document.getElementById('status-display').innerText = "Tidak terdeteksi";
                         }
                     })
-                    .catch(err => {
-                        // Kalau ada error (misal camera udah stop), stop semua interval
-                        stopAll();
-                    });
-            }, 1000);
+                    .catch(err => console.error("Error:", err));
+                }
+            }, 1000); // Kirim tiap 1000ms (1 detik) biar server nggak berat
         }
 
-        // 4. Fungsi untuk stop semua interval
-        function stopAll() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-            if (apiCheckInterval) {
-                clearInterval(apiCheckInterval);
-                apiCheckInterval = null;
-            }
-            // Reset badge ke default
-            const badge = document.getElementById('statusBadge');
-            const msg = document.getElementById('aiMessage');
-            badge.className = "px-4 py-1 rounded-full text-sm font-bold bg-gray-600 text-gray-300";
-            badge.innerText = "Camera Dimatikan";
-            msg.innerText = "Kamera telah dimatikan. Silakan refresh halaman untuk memulai kembali.";
-            msg.className = "text-xl font-semibold text-gray-400";
+        function stopMonitoring() {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            window.location.href = '/dashboard';
         }
-
-        // Initialize saat halaman load
-        window.addEventListener('load', () => {
-            initAudio();
-            startTimer();
-            startAPICheck();
-        });
-
-        // Cleanup saat halaman ditutup/refresh
-        window.addEventListener('beforeunload', () => {
-            stopAll();
-        });
     </script>
 </body>
 </html>
