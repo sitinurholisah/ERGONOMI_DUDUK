@@ -2,90 +2,321 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitoring Live - ErgoVision</title>
+    
+    <!-- MediaPipe Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    
     <style>
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
-        #video-container { position: relative; width: 640px; margin: 0 auto; }
-        video { width: 100%; border-radius: 10px; border: 2px solid #0f3460; }
-        #overlay { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; text-align: left; }
-        .status-box { margin-top: 20px; padding: 15px; background: #16213e; border-radius: 10px; display: inline-block; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e94560; color: white; border: none; border-radius: 5px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #1a1a2e;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        
+        .container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            border: 3px solid #0f3460;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        #input_video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        
+        #output_canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+        
+        #info_overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 100;
+            min-width: 180px;
+            border-left: 3px solid #00ff00;
+        }
+        
+        #info_overlay div {
+            margin: 6px 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        
+        #info_overlay label {
+            color: #aaa;
+            font-weight: 500;
+        }
+        
+        #info_overlay span {
+            font-weight: bold;
+        }
+        
+        .status-box {
+            margin-top: 20px;
+            padding: 15px 25px;
+            background: #16213e;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 16px;
+        }
+        
+        .btn-stop {
+            margin-top: 20px;
+            padding: 12px 30px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #e94560;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-stop:hover {
+            background: #c13651;
+        }
     </style>
 </head>
 <body>
-    <h1>Monitoring Postur Real-Time</h1>
+    <h1>Real-Time Posture Monitoring</h1>
     
-    <div id="video-container">
-        <video id="webcam" autoplay playsinline></video>
-        <div id="overlay">
-            <div style="color: yellow;">Sudut: <span id="angle-display">-</span></div>
-            <div style="color: #0f0;">Skor: <span id="score-display">-</span></div>
-            <div style="color: white;">Status: <span id="status-display">Menunggu...</span></div>
+    <div class="container">
+        <video id="input_video" autoplay playsinline></video>
+        <canvas id="output_canvas" width="640" height="480"></canvas>
+        
+        <div id="info_overlay">
+            <div>
+                <label>Angle:</label>
+                <span id="angle-display" style="color: yellow;">-</span>
+            </div>
+            <div>
+                <label>Score:</label>
+                <span id="score-display" style="color: #0f0;">-</span>
+            </div>
+            <div>
+                <label>Status:</label>
+                <span id="status-display" style="color: white;">Loading...</span>
+            </div>
         </div>
     </div>
-
+    
     <div class="status-box">
-        <p>AI Status: <span id="ai-status" style="color: yellow;">Processing...</span></p>
+        AI Status: <span id="ai-status" style="color: yellow;">Initializing MediaPipe...</span>
     </div>
-    <br>
-    <button onclick="stopMonitoring()">Stop Monitoring & Kembali</button>
-
-    <canvas id="canvas" style="display:none;"></canvas>
-
+    
+    <a href="/dashboard" class="btn-stop">Stop Monitoring & Kembali</a>
+    
     <script>
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        let stream;
-
-        // 1. Akses Webcam Browser
-        navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-            .then(s => {
-                stream = s;
-                video.srcObject = stream;
-                video.play();
-                startAnalysis();
-            })
-            .catch(err => {
-                alert("Gagal akses webcam: " + err);
-            });
-
-        // 2. Kirim gambar ke server tiap 1 detik
-        function startAnalysis() {
-            setInterval(() => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    const imageData = canvas.toDataURL('image/jpeg', 0.5); // Kompres gambar
-                    
-                    fetch('/api/analyze_posture', {
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        let lastSendTime = 0;
+        let currentAngle = 0;
+        let currentScore = 0;
+        let currentKategori = '';
+        
+        function calculateAngle(landmarks) {
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            const shoulderX = (leftShoulder.x + rightShoulder.x) / 2;
+            const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+            const hipX = (leftHip.x + rightHip.x) / 2;
+            const hipY = (leftHip.y + rightHip.y) / 2;
+            
+            const dx = Math.abs(shoulderX - hipX);
+            const dy = hipY - shoulderY;
+            
+            const angleRad = Math.atan2(dx, dy);
+            const angleDeg = angleRad * (180 / Math.PI);
+            
+            return angleDeg;
+        }
+        
+        function getScoreAndKategori(angle) {
+            if (angle < 20) {
+                return { skor: 1, kategori: '0° - 20° flexion', status: 'TEGAK' };
+            } else if (angle < 60) {
+                return { skor: 2, kategori: '20° - 60° flexion', status: 'BUNGKUK' };
+            } else {
+                return { skor: 3, kategori: '> 60° flexion', status: 'BUNGKUK' };
+            }
+        }
+        
+        function drawSpineLine(landmarks, width, height) {
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            const shoulderX = ((leftShoulder.x + rightShoulder.x) / 2) * width;
+            const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * height;
+            const hipX = ((leftHip.x + rightHip.x) / 2) * width;
+            const hipY = ((leftHip.y + rightHip.y) / 2) * height;
+            
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(shoulderX, shoulderY);
+            canvasCtx.lineTo(hipX, hipY);
+            canvasCtx.strokeStyle = '#00FF00';
+            canvasCtx.lineWidth = 5;
+            canvasCtx.lineCap = 'round';
+            canvasCtx.stroke();
+            
+            canvasCtx.beginPath();
+            canvasCtx.arc(shoulderX, shoulderY, 8, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = '#FFFF00';
+            canvasCtx.fill();
+            canvasCtx.strokeStyle = '#FFFFFF';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.stroke();
+            
+            canvasCtx.beginPath();
+            canvasCtx.arc(hipX, hipY, 8, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = '#FF0000';
+            canvasCtx.fill();
+            canvasCtx.strokeStyle = '#FFFFFF';
+            canvasCtx.lineWidth = 2;
+            canvasCtx.stroke();
+        }
+        
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            
+            if (results.poseLandmarks) {
+                drawSpineLine(results.poseLandmarks, canvasElement.width, canvasElement.height);
+                
+                currentAngle = calculateAngle(results.poseLandmarks);
+                const info = getScoreAndKategori(currentAngle);
+                currentScore = info.skor;
+                currentKategori = info.kategori;
+                
+                document.getElementById('angle-display').textContent = currentAngle.toFixed(1) + '°';
+                document.getElementById('score-display').textContent = currentScore;
+                document.getElementById('status-display').textContent = info.kategori;
+                
+                const statusEl = document.getElementById('status-display');
+                if (currentScore <= 1) {
+                    statusEl.style.color = '#00FF00';
+                } else {
+                    statusEl.style.color = '#FF4444';
+                }
+                
+                const now = Date.now();
+                if (now - lastSendTime > 2000) {
+                    fetch('/api/log_posture', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ image: imageData })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            document.getElementById('angle-display').innerText = data.sudut + " deg";
-                            document.getElementById('score-display').innerText = data.skor;
-                            document.getElementById('status-display').innerText = data.kategori;
-                            document.getElementById('ai-status').innerText = "AI Aktif (Server)";
-                            document.getElementById('ai-status').style.color = "#0f0";
-                        } else {
-                            document.getElementById('status-display').innerText = "Tidak terdeteksi";
-                        }
-                    })
-                    .catch(err => console.error("Error:", err));
+                        body: JSON.stringify({
+                            sudut: currentAngle.toFixed(1),
+                            skor: currentScore,
+                            kategori: currentKategori,
+                            status: info.status
+                        })
+                    }).catch(err => console.log('Log error:', err));
+                    lastSendTime = now;
                 }
-            }, 1000); // Kirim tiap 1000ms (1 detik) biar server nggak berat
+                
+                document.getElementById('ai-status').textContent = 'AI Active - Pose Detected';
+                document.getElementById('ai-status').style.color = '#00FF00';
+            } else {
+                document.getElementById('status-display').textContent = 'No Pose';
+                document.getElementById('ai-status').textContent = 'Waiting for person...';
+                document.getElementById('ai-status').style.color = '#FFD700';
+            }
+            
+            canvasCtx.restore();
         }
-
-        function stopMonitoring() {
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            window.location.href = '/dashboard';
+        
+        const pose = new Pose({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+        
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        
+        pose.onResults(onResults);
+        
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480 }
+                });
+                
+                videoElement.srcObject = stream;
+                
+                videoElement.onloadeddata = () => {
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                    
+                    async function processFrame() {
+                        await pose.send({image: videoElement});
+                        requestAnimationFrame(processFrame);
+                    }
+                    
+                    processFrame();
+                };
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                alert('Gagal akses webcam: ' + err.message);
+                document.getElementById('ai-status').textContent = 'Camera Error!';
+                document.getElementById('ai-status').style.color = 'red';
+            }
         }
+        
+        startCamera();
     </script>
 </body>
 </html>
